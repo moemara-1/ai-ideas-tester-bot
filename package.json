@@ -1,0 +1,53 @@
+{
+  "name": "b2b-web-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenClaw autonomous B2B lead generation and outreach platform",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "next typegen && rm -f tsconfig.tsbuildinfo && tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "worker": "tsx src/workers/worker.ts",
+    "validate:env": "tsx src/lib/env/validate-env.ts",
+    "validate:foundation": "node ./scripts/validate-foundation.mjs",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:status": "prisma migrate status",
+    "prisma:seed": "prisma db seed",
+    "check": "npm run validate:foundation && npm run typecheck && npm run test && npm run build",
+    "predev": "npm run validate:env",
+    "prestart": "npm run validate:env",
+    "preworker": "npm run validate:env"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bullmq": "^5.37.0",
+    "dotenv": "^16.4.5",
+    "ioredis": "^5.4.2",
+    "next": "^15.2.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.16",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

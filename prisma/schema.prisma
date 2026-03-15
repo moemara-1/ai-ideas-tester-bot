@@ -1,0 +1,346 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Campaign {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  name            String
+  description     String?
+  status          String   @default("draft")
+  targetRegion    String?
+  targetVertical  String?
+  targetingConfig String?
+  idempotencyKey  String   @unique
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  businesses       Business[]
+  leads            Lead[]
+  outreachMessages OutreachMessage[]
+  payments         Payment[]
+  agentRuns        AgentRun[]
+  activityLogs     ActivityLog[]
+  demoSites        DemoSite[]
+
+  @@index([status, createdAt])
+}
+
+model Business {
+  id               String   @id @default(cuid())
+  campaignId       String
+  source           String   @default("google_maps")
+  externalSourceId String?
+  name             String
+  normalizedName   String
+  websiteUrl       String?
+  normalizedDomain String?
+  phone            String?
+  primaryEmail     String?
+  addressLine1     String?
+  city             String?
+  state            String?
+  country          String?
+  postalCode       String?
+  idempotencyKey   String   @unique
+  metadata          String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  leads    Lead[]
+
+  @@unique([campaignId, normalizedName])
+  @@unique([campaignId, externalSourceId])
+  @@index([campaignId, normalizedDomain])
+}
+
+model Lead {
+  id                 String   @id @default(cuid())
+  campaignId         String
+  businessId         String
+  status             String   @default("discovered")
+  score              Int?
+  firstName          String?
+  lastName           String?
+  fullName           String?
+  title              String?
+  contactEmail       String?
+  contactPhone       String?
+  linkedinUrl        String?
+  websiteSummary     String?
+  qualificationNotes String?
+  suppressedAt       DateTime?
+  idempotencyKey     String   @unique
+  metadata          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  campaign         Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  business         Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  demoSites        DemoSite[]
+  outreachMessages OutreachMessage[]
+  payments         Payment[]
+  agentRuns        AgentRun[]
+  activityLogs     ActivityLog[]
+
+  @@unique([campaignId, businessId])
+  @@index([campaignId, status, score])
+  @@index([contactEmail])
+}
+
+model DemoSite {
+  id                String   @id @default(cuid())
+  campaignId        String
+  leadId            String
+  status            String   @default("queued")
+  provider          String   @default("cloudflare_pages")
+  deploymentId      String?
+  productionUrl     String?
+  previewUrl        String?
+  templateName      String?
+  buildArtifactPath String?
+  lastBuildError    String?
+  idempotencyKey    String   @unique
+  deployedAt        DateTime?
+  metadata          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, deploymentId])
+  @@index([leadId, status])
+  @@index([campaignId, status])
+}
+
+model OutreachMessage {
+  id                String   @id @default(cuid())
+  campaignId        String
+  leadId            String
+  channel           String   @default("email")
+  provider          String   @default("resend")
+  status            String   @default("queued")
+  toEmail           String
+  fromEmail         String?
+  subject           String?
+  bodyText          String?
+  bodyHtml          String?
+  providerMessageId String?  @unique
+  idempotencyKey    String   @unique
+  sendAfter         DateTime?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  openedAt          DateTime?
+  repliedAt         DateTime?
+  bouncedAt         DateTime?
+  failureReason     String?
+  metadata          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  campaign Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead     Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@index([leadId, status, sendAfter])
+  @@index([campaignId, status])
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  campaignId        String
+  leadId            String
+  outreachMessageId String?
+  provider          String   @default("stripe")
+  status            String   @default("created")
+  currency          String   @default("USD")
+  amountCents       Int
+  checkoutSessionId String?  @unique
+  paymentIntentId   String?  @unique
+  paymentUrl        String?
+  idempotencyKey    String   @unique
+  expiresAt         DateTime?
+  completedAt       DateTime?
+  failureReason     String?
+  metadata          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  campaign        Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead            Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  outreachMessage OutreachMessage? @relation(fields: [outreachMessageId], references: [id], onDelete: SetNull)
+
+  @@index([leadId, status])
+  @@index([campaignId, status])
+}
+
+model AgentRun {
+  id             String   @id @default(cuid())
+  campaignId     String?
+  leadId         String?
+  queueName      String
+  jobId          String
+  jobName        String
+  runKey         String
+  status         String
+  triggerSource  String   @default("queue")
+  attempt        Int      @default(1)
+  maxAttempts    Int      @default(1)
+  correlationId  String
+  idempotencyKey String   @unique
+  startedAt      DateTime @default(now())
+  finishedAt     DateTime?
+  durationMs     Int?
+  errorMessage   String?
+  input          String?
+  output         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  campaign     Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  lead         Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  activityLogs ActivityLog[]
+
+  @@unique([runKey, attempt])
+  @@index([campaignId, status, startedAt])
+  @@index([leadId, status, startedAt])
+  @@index([queueName, jobId])
+}
+
+model ActivityLog {
+  id             String   @id @default(cuid())
+  campaignId     String?
+  leadId         String?
+  agentRunId     String?
+  entityType     String
+  entityId       String?
+  event          String
+  level          String   @default("info")
+  queueName      String?
+  jobId          String?
+  correlationId  String?
+  message        String?
+  payload        String?
+  idempotencyKey String   @unique
+  occurredAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  lead     Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  agentRun AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+
+  @@index([campaignId, occurredAt])
+  @@index([leadId, occurredAt])
+  @@index([agentRunId, occurredAt])
+  @@index([entityType, entityId, occurredAt])
+}
+
+// ============ NEW MODELS FOR AI IDEA INTELLIGENCE ============
+
+model Subreddit {
+  id            String   @id @default(cuid())
+  name          String   @unique // e.g., "ArtificialIntelligence"
+  displayName   String?
+  subscribers   Int      @default(0)
+  isActive      Boolean  @default(true)
+  lastFetchedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model Idea {
+  id              String   @id @default(cuid())
+  redditId        String   @unique
+  subreddit       String
+  title           String
+  url             String
+  description     String?
+  author          String?
+  upvotes         Int      @default(0)
+  commentCount    Int      @default(0)
+  
+  // Scores
+  viralityScore   Int      @default(0)
+  noveltyScore    Int      @default(0)
+  feasibilityScore Int     @default(0)
+  compositeScore  Int      @default(0)
+  
+  // Status: discovered, scored, generating, completed, failed
+  status          String   @default("discovered")
+  sourceData      String?  // Raw JSON from Reddit
+  errorMessage    String?  // Error message when status is failed
+  
+  experiments     Experiment[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([compositeScore])
+  @@index([status])
+  @@index([subreddit])
+}
+
+model Experiment {
+  id              String   @id @default(cuid())
+  ideaId          String
+  
+  // Status: pending, generating, running, completed, failed
+  status          String   @default("pending")
+  
+  // Generation
+  promptUsed      String?
+  
+  // Execution
+  executionTimeMs Int?
+  executionOutput String?
+  exitCode        Int?
+  errorMessage    String?
+  
+  files              GeneratedFile[]
+  executionResults   ExecutionResult[]
+  idea               Idea          @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status])
+  @@index([ideaId])
+}
+
+model GeneratedFile {
+  id            String   @id @default(cuid())
+  experimentId  String
+  path          String   // e.g., "src/index.ts"
+  content       String   // File content
+  language      String?  // e.g., "typescript", "python"
+  
+  experiment    Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  
+  @@unique([experimentId, path])
+}
+
+model ExecutionResult {
+  id            String   @id @default(cuid())
+  experimentId  String
+  
+  step          String   // e.g., "install", "build", "run"
+  output        String?
+  exitCode      Int?
+  startedAt     DateTime
+  completedAt   DateTime?
+  durationMs    Int?
+  
+  experiment    Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  
+  @@index([experimentId])
+}
