@@ -4,15 +4,16 @@ const DELIMITER = ",";
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  DATA_SOURCE: z.enum(["reddit", "hackernews"]).default("hackernews"),
   OPENROUTER_API_KEY: z.string().min(1),
   OPENROUTER_FREE_MODEL_ALLOWLIST: z.string().min(1),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
   
-  // Reddit API
-  REDDIT_CLIENT_ID: z.string().min(1),
-  REDDIT_CLIENT_SECRET: z.string().min(1),
-  REDDIT_USER_AGENT: z.string().min(1),
+  // Reddit API (required only if DATA_SOURCE=reddit)
+  REDDIT_CLIENT_ID: z.string().optional(),
+  REDDIT_CLIENT_SECRET: z.string().optional(),
+  REDDIT_USER_AGENT: z.string().optional(),
   
   // Optional - for backward compatibility
   APP_URL: z.string().url().optional(),

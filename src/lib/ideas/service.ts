@@ -1,11 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { getRedditClient, type RedditPost } from "@/lib/reddit/client";
+import { getHackerNewsClient, type HNStory } from "@/lib/hackernews/client";
+import { getServerEnv } from "@/lib/env/server-env";
 
 export type IdeaStatus = "discovered" | "scored" | "generating" | "completed" | "failed";
+export type DataSource = "reddit" | "hackernews";
 
-export interface CreateIdeaFromRedditPostParams {
-  redditId: string;
-  subreddit: string;
+export interface CreateIdeaParams {
+  sourceId: string;
+  source: DataSource;
   title: string;
   url: string;
   description: string | null;
@@ -45,7 +48,40 @@ export async function upsertIdeaFromRedditPost(post: RedditPost): Promise<{ id: 
     select: { id: true },
   });
 
-  return { id: idea.id, created: false }; // upsert always returns existing or created
+  return { id: idea.id, created: false };
+}
+
+/**
+ * Create or update an idea from a Hacker News story
+ */
+export async function upsertIdeaFromHNStory(story: HNStory): Promise<{ id: string; created: boolean }> {
+  const idea = await prisma.idea.upsert({
+    where: { redditId: `hn_${story.id}` },
+    create: {
+      redditId: `hn_${story.id}`,
+      subreddit: "hackernews",
+      title: story.title,
+      url: story.url || `https://news.ycombinator.com/item?id=${story.id}`,
+      description: story.text || null,
+      author: story.by,
+      upvotes: story.score,
+      commentCount: story.descendants,
+      sourceData: JSON.stringify({
+        hnId: story.id,
+        time: story.time,
+        url: story.url,
+        kids: story.kids,
+      }),
+      status: "discovered",
+    },
+    update: {
+      upvotes: story.score,
+      commentCount: story.descendants,
+    },
+    select: { id: true },
+  });
+
+  return { id: idea.id, created: false };
 }
 
 /**
@@ -177,14 +213,52 @@ export async function getTopIdeasForGeneration(limit: number = 10) {
 }
 
 /**
- * Discover ideas from Reddit
+ * Discover ideas from configured data source (Reddit or Hacker News)
  */
 export interface DiscoverIdeasParams {
-  subreddits?: string[];
+  subreddits?: string[];  // For Reddit only
   postsPerSubreddit?: number;
   minUpvotes?: number;
 }
 
+export async function discoverIdeas(params: DiscoverIdeasParams = {}) {
+  const env = getServerEnv();
+  
+  if (env.DATA_SOURCE === "hackernews") {
+    return discoverIdeasFromHN(params);
+  }
+  
+  return discoverIdeasFromReddit(params);
+}
+
+/**
+ * Discover ideas from Hacker News
+ */
+export async function discoverIdeasFromHN(params: DiscoverIdeasParams = {}) {
+  const { minUpvotes = 5 } = params;
+  
+  const client = getHackerNewsClient();
+  
+  // Get AI-related stories from HN
+  const stories = await client.getAITopStories(50);
+  
+  let discoveredCount = 0;
+  
+  for (const story of stories) {
+    // Filter by minimum upvotes
+    if (story.score < minUpvotes) continue;
+    
+    const { id } = await upsertIdeaFromHNStory(story);
+    discoveredCount++;
+  }
+  
+  console.log(`HN Discovery: Found ${discoveredCount} AI-related stories`);
+  return { discoveredCount };
+}
+
+/**
+ * Discover ideas from Reddit (original method)
+ */
 export async function discoverIdeasFromReddit(params: DiscoverIdeasParams = {}) {
   const { subreddits, postsPerSubreddit = 25, minUpvotes = 5 } = params;
 
