@@ -5,8 +5,9 @@ const DELIMITER = ",";
 const EnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATA_SOURCE: z.enum(["reddit", "hackernews"]).default("hackernews"),
-  OPENROUTER_API_KEY: z.string().min(1),
-  OPENROUTER_FREE_MODEL_ALLOWLIST: z.string().min(1),
+  CODE_GENERATOR: z.enum(["openrouter", "opencode"]).default("openrouter"),
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_FREE_MODEL_ALLOWLIST: z.string().optional(),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
   
@@ -25,6 +26,24 @@ const EnvSchema = z.object({
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   OPENCLAW_API_KEY: z.string().optional(),
+}).superRefine((data, ctx) => {
+  // If using OpenRouter, require API key
+  if (data.CODE_GENERATOR === "openrouter") {
+    if (!data.OPENROUTER_API_KEY || data.OPENROUTER_API_KEY.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "OPENROUTER_API_KEY is required when CODE_GENERATOR=openrouter",
+        path: ["OPENROUTER_API_KEY"],
+      });
+    }
+    if (!data.OPENROUTER_FREE_MODEL_ALLOWLIST || data.OPENROUTER_FREE_MODEL_ALLOWLIST.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "OPENROUTER_FREE_MODEL_ALLOWLIST is required when CODE_GENERATOR=openrouter",
+        path: ["OPENROUTER_FREE_MODEL_ALLOWLIST"],
+      });
+    }
+  }
 });
 
 type RawServerEnv = z.infer<typeof EnvSchema>;
@@ -70,7 +89,7 @@ export function getServerEnv(): ServerEnv {
 
   const validatedEnv: ServerEnv = {
     ...parsed.data,
-    OPENROUTER_FREE_MODEL_ALLOWLIST: toAllowlist(parsed.data.OPENROUTER_FREE_MODEL_ALLOWLIST),
+    OPENROUTER_FREE_MODEL_ALLOWLIST: toAllowlist(parsed.data.OPENROUTER_FREE_MODEL_ALLOWLIST || ""),
   };
 
   cachedEnv = validatedEnv;
