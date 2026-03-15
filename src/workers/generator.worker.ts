@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { updateIdeaStatus } from "@/lib/ideas/service";
 import { generateCodeForIdea, detectProjectType } from "@/lib/codegen/generator";
+import { generateCodeWithOpenCode, inferProjectType } from "@/lib/opencode/generator";
+import { getServerEnv } from "@/lib/env/server-env";
 import { emitActivityLog } from "@/lib/instrumentation/activity-log";
 import { createActivityLogEntry } from "@/lib/instrumentation/activity-log";
 import { QueueNames } from "./queue-names";
@@ -11,7 +13,7 @@ export interface IdeaGenerationJob {
 }
 
 /**
- * Generate code for an idea
+ * Generate code for an idea using the configured generator
  */
 export async function processIdeaGeneration(jobData: IdeaGenerationJob): Promise<{
   experimentId: string;
@@ -34,13 +36,29 @@ export async function processIdeaGeneration(jobData: IdeaGenerationJob): Promise
   // Detect or use specified project type
   const projectType = jobData.projectType || detectProjectType(idea.title);
 
+  const env = getServerEnv();
+  let result;
+
   try {
-    // Generate code using LLM
-    const result = await generateCodeForIdea(
-      idea.title,
-      idea.description,
-      projectType
-    );
+    if (env.CODE_GENERATOR === "opencode") {
+      // Use OpenCode with MiniMax M2.5 Free
+      console.log("Using OpenCode for code generation...");
+      const openCodeProjectType = jobData.projectType || inferProjectType(idea.title, idea.description);
+      
+      result = await generateCodeWithOpenCode({
+        ideaTitle: idea.title,
+        ideaDescription: idea.description,
+        projectType: openCodeProjectType,
+      });
+    } else {
+      // Use OpenRouter (default)
+      console.log("Using OpenRouter for code generation...");
+      result = await generateCodeForIdea(
+        idea.title,
+        idea.description,
+        projectType
+      );
+    }
 
     // Create experiment record
     const experiment = await prisma.experiment.create({
